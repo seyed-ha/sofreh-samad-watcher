@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sofreh — reservation watcher</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #fbfaf7; --card: #fff; --ink: #1d1c1a; --muted: #6b6862;
+      --line: #e6e2da; --ok: #1f7a44; --warn: #a8611a; --bad: #a32020;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #171614; --card: #201f1c; --ink: #f0ede7; --muted: #a29d94;
+        --line: #322f2a; --ok: #6fcf97; --warn: #e0a458; --bad: #e07a7a;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; padding: 24px 16px; background: var(--bg); color: var(--ink);
+      font: 15px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    }
+    main { max-width: 760px; margin: 0 auto; }
+    h1 { font-size: 22px; margin: 0 0 4px; }
+    h2 { font-size: 15px; margin: 28px 0 10px; color: var(--muted);
+         text-transform: uppercase; letter-spacing: .06em; }
+    .sub { color: var(--muted); margin: 0 0 20px; font-size: 13px; }
+    .card { background: var(--card); border: 1px solid var(--line);
+            border-radius: 10px; padding: 16px; margin-bottom: 12px; }
+    .headline { font-size: 18px; font-weight: 600; margin: 0 0 6px; }
+    .ok { color: var(--ok); } .warn { color: var(--warn); } .bad { color: var(--bad); }
+    dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px;
+         margin: 10px 0 0; font-size: 13px; }
+    dt { color: var(--muted); }
+    dd { margin: 0; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); }
+    th { color: var(--muted); font-weight: 500; }
+    .wrap { overflow-x: auto; }
+    footer { margin-top: 28px; font-size: 13px; color: var(--muted); }
+    a { color: inherit; }
+    code { font-size: 12px; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Sofreh</h1>
+  <p class="sub">Watching the Samad dining calendar. Last loaded {{ now|date:"Y-m-d H:i" }}.</p>
+
+  {% for row in watches %}
+    <div class="card">
+      <p class="headline {% if row.is_open %}ok{% elif row.has_problem %}bad{% endif %}">
+        {% if row.is_open %}
+          Reservation is open for {{ row.target_week }}
+        {% elif row.has_problem %}
+          Something is wrong — {{ row.latest.get_outcome_display }}
+        {% elif row.latest %}
+          Not open yet for {{ row.target_week }}
+        {% else %}
+          Never checked
+        {% endif %}
+      </p>
+      <dl>
+        <dt>Watch</dt><dd>{{ row.watch.name }}{% if not row.watch.is_active %} (paused){% endif %}</dd>
+        <dt>Target week</dt><dd>{{ row.target_week }} (Saturday)</dd>
+        <dt>Dining hall</dt><dd>{{ row.watch.self_id|default:"all" }}</dd>
+        <dt>Last checked</dt>
+        <dd>{% if row.watch.last_checked_at %}{{ row.watch.last_checked_at|date:"Y-m-d H:i" }}{% else %}never{% endif %}</dd>
+        <dt>Announced</dt>
+        <dd>{{ row.watch.notified_week_start|default:"not yet" }}</dd>
+        {% if row.latest.api_message %}
+          <dt>API said</dt><dd>{{ row.latest.api_message }}</dd>
+        {% endif %}
+      </dl>
+    </div>
+  {% empty %}
+    <div class="card">
+      <p class="headline warn">No watch configured</p>
+      <p class="sub" style="margin:0">
+        Run <code>manage.py sofreh_setup --access-token … --bot-token … --chat-ids …</code>
+        to get started.
+      </p>
+    </div>
+  {% endfor %}
+
+  <h2>Credentials</h2>
+  <div class="card">
+    <dl>
+      <dt>Samad account</dt>
+      <dd>
+        {% if account %}
+          {{ account.label }}
+          {% if auth_error %}<span class="bad">— needs new tokens</span>{% endif %}
+        {% else %}<span class="bad">none</span>{% endif %}
+      </dd>
+      <dt>Access token expires</dt>
+      <dd>{% if access_expires_at %}{{ access_expires_at|date:"Y-m-d H:i" }}{% else %}unknown{% endif %}</dd>
+      <dt>Telegram</dt>
+      <dd>
+        {% if bot %}{{ bot.label }} — {{ chat_count }} chat{{ chat_count|pluralize }}
+        {% else %}<span class="bad">no bot configured</span>{% endif %}
+      </dd>
+    </dl>
+    {% if auth_error %}<p class="bad" style="margin:10px 0 0"><code>{{ auth_error }}</code></p>{% endif %}
+  </div>
+
+  <h2>Recent checks</h2>
+  <div class="card wrap">
+    <table>
+      <thead>
+        <tr><th>When</th><th>Week</th><th>Outcome</th><th>Programs</th><th>Notified</th></tr>
+      </thead>
+      <tbody>
+        {% for check in recent %}
+          <tr>
+            <td>{{ check.checked_at|date:"m-d H:i" }}</td>
+            <td>{{ check.week_start }}</td>
+            <td class="{% if check.is_problem %}bad{% elif check.outcome == 'open' %}ok{% endif %}">
+              {{ check.get_outcome_display }}
+            </td>
+            <td>{{ check.program_count }}</td>
+            <td>{% if check.notified %}yes{% else %}—{% endif %}</td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="5">Nothing yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <footer>Configure everything in the <a href="/admin/">admin</a>.</footer>
+</main>
+</body>
+</html>
