@@ -60,6 +60,30 @@ class SamadClientTests(TestCase):
         self.assertEqual(result.api_code, 10108005)
         self.assertFalse(result.is_problem)
 
+    def test_not_open_is_recognised_even_though_it_arrives_as_http_400(self):
+        # The live endpoint answers an unpublished week with 400 plus the
+        # normal envelope. Reading the status code alone would call that a
+        # failure and alert the user every few minutes.
+        client, _ = self.client_with(
+            get_responses=[FakeResponse(400, PROGRAMS_NOT_OPEN)]
+        )
+
+        result = client.fetch_programs(WEEK)
+
+        self.assertEqual(result.outcome, Outcome.NOT_OPEN)
+        self.assertEqual(result.http_status, 400)
+        self.assertFalse(result.is_problem)
+
+    def test_http_error_without_an_envelope_is_still_an_error(self):
+        client, _ = self.client_with(
+            get_responses=[FakeResponse(502, text="<html>bad gateway</html>")]
+        )
+
+        result = client.fetch_programs(WEEK)
+
+        self.assertEqual(result.outcome, Outcome.API_ERROR)
+        self.assertEqual(result.http_status, 502)
+
     def test_unrecognised_api_error_is_surfaced(self):
         client, _ = self.client_with(
             get_responses=[FakeResponse(200, PROGRAMS_UNKNOWN_ERROR)]

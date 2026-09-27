@@ -205,6 +205,16 @@ class SamadClient:
                 detail=response.text[:300],
             )
 
+        # A week that is not published yet comes back as HTTP 400 carrying the
+        # ordinary envelope, so the body decides before the status code does.
+        try:
+            body = response.json()
+        except ValueError:
+            body = None
+
+        if isinstance(body, dict) and body.get("type"):
+            return self._interpret(body, response.status_code)
+
         if response.status_code >= 400:
             return ProgramsResult(
                 outcome=Outcome.API_ERROR,
@@ -212,16 +222,11 @@ class SamadClient:
                 detail=f"HTTP {response.status_code}: {response.text[:300]}",
             )
 
-        try:
-            body = response.json()
-        except ValueError:
-            return ProgramsResult(
-                outcome=Outcome.API_ERROR,
-                http_status=response.status_code,
-                detail=f"Response was not JSON: {response.text[:300]}",
-            )
-
-        return self._interpret(body, response.status_code)
+        return ProgramsResult(
+            outcome=Outcome.API_ERROR,
+            http_status=response.status_code,
+            detail=f"Response was not the expected envelope: {response.text[:300]}",
+        )
 
     def _interpret(self, body, http_status):
         api_type = str(body.get("type") or "")
