@@ -52,7 +52,8 @@ class Command(BaseCommand):
             self.stdout.write(style(report.summary))
             for note in report.notes:
                 self.stdout.write(f"    {note}")
-            if report.result.detail:
+            # A skip puts its reason in both places; do not say it twice.
+            if report.result.detail and report.result.detail not in report.notes:
                 self.stdout.write(f"    {report.result.detail}")
         return None
 

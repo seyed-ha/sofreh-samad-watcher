@@ -11,7 +11,7 @@ from datetime import date
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 
-from sofreh.dates import week_start_for
+from sofreh.dates import current_week_start, week_start_for
 from sofreh.jwt_tools import jwt_expiry
 from sofreh.models import Outcome, SamadAccount, TelegramBot, Watch
 from sofreh.services import messages
@@ -126,9 +126,10 @@ class Command(BaseCommand):
             self._fail(f"{result.outcome}: {result.detail[:200]}")
             return target, None
 
-        # The target week is closed, so borrow an already-published week to
-        # show what a real announcement looks like.
-        fallback = week_start_for(0)
+        # The target week is closed, so borrow the week we are living in --
+        # which is published by definition -- to show what a real announcement
+        # looks like.
+        fallback = current_week_start()
         if fallback != target:
             sample = client.fetch_programs(fallback, self_id=self_id)
             if sample.outcome == Outcome.OPEN:

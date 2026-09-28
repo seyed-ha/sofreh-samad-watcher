@@ -63,14 +63,23 @@ class CheckerTests(TestCase):
         self.assertEqual(self.watch.last_outcome, Outcome.OPEN)
         self.assertTrue(CheckResult.objects.get().notified)
 
-    def test_second_poll_of_the_same_open_week_stays_quiet(self):
+    def test_second_poll_of_the_same_open_week_asks_nothing_at_all(self):
         self.run_once(FakeResponse(200, PROGRAMS_OPEN))
 
-        report, telegram = self.run_once(FakeResponse(200, PROGRAMS_OPEN))
+        # An announced week will not change its mind, so the second round
+        # makes no request: no HTTP call, no message, no new record.
+        samad = FakeSession(get_responses=[])
+        telegram = FakeSession(post_responses=[])
+        report = run_watch(
+            self.watch, week_start=WEEK, session=samad, telegram_session=telegram
+        )
 
+        self.assertEqual(report.result.outcome, Outcome.SKIPPED)
         self.assertFalse(report.notified)
+        self.assertEqual(samad.get_calls, [])
         self.assertEqual(telegram.post_calls, [])
-        self.assertEqual(CheckResult.objects.count(), 2)
+        self.assertEqual(CheckResult.objects.count(), 1)
+        self.assertIn("Already announced", " ".join(report.notes))
 
     def test_force_notify_reannounces(self):
         self.run_once(FakeResponse(200, PROGRAMS_OPEN))

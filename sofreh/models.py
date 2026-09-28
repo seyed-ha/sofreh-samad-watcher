@@ -22,6 +22,7 @@ class Outcome(models.TextChoices):
     AUTH_FAILED = "auth_failed", "Authentication failed"
     API_ERROR = "api_error", "API error"
     NETWORK_ERROR = "network_error", "Network error"
+    SKIPPED = "skipped", "Skipped — no request made"
 
     @classmethod
     def problems(cls):
@@ -199,8 +200,9 @@ class Watch(models.Model):
         help_text="Dining hall id. Leave empty to omit the parameter entirely.",
     )
     weeks_ahead = models.PositiveSmallIntegerField(
-        default=1,
-        help_text="1 = the Saturday after the current week. 0 = this week (useful for testing).",
+        default=0,
+        help_text="0 = the upcoming Saturday (the normal case). 1 looks a "
+        "further week out.",
     )
     fixed_week_start = models.DateField(
         null=True,
@@ -209,6 +211,15 @@ class Watch(models.Model):
     )
 
     is_active = models.BooleanField(default=True)
+    follows = models.ForeignKey(
+        "self",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="followers",
+        help_text="Only poll this watch once the named watch has seen its week "
+        "open. Saves requests when one self reliably publishes first.",
+    )
 
     last_checked_at = models.DateTimeField(null=True, blank=True)
     last_outcome = models.CharField(
@@ -240,6 +251,18 @@ class Watch(models.Model):
 
     def already_notified_for(self, week_start):
         return self.notified_week_start == week_start
+
+    def gate_is_open(self, week_start):
+        """True when the watch we follow has already seen `week_start` open.
+
+        A watch with no `follows` is never gated. This reads the recorded
+        history rather than in-memory state, so it survives a restart.
+        """
+        if self.follows_id is None:
+            return True
+        return self.follows.results.filter(
+            week_start=week_start, outcome=Outcome.OPEN
+        ).exists()
 
 
 class CheckResult(models.Model):

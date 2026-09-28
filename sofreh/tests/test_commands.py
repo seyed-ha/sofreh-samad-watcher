@@ -48,7 +48,7 @@ class SetupCommandTests(TestCase):
         watch = Watch.objects.get(name="Next week")
         self.assertEqual(watch.account, account)
         self.assertEqual(watch.bot, bot)
-        self.assertEqual(watch.weeks_ahead, 1)
+        self.assertEqual(watch.weeks_ahead, 0)
 
     def test_is_idempotent(self):
         args = [

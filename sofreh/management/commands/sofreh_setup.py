@@ -30,8 +30,8 @@ class Command(BaseCommand):
         parser.add_argument(
             "--weeks-ahead",
             type=int,
-            default=1,
-            help="1 = watch the Saturday after this week (default).",
+            default=0,
+            help="0 = the upcoming Saturday (default). 1 looks a week further out.",
         )
         parser.add_argument(
             "--discover-chats",

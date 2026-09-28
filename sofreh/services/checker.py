@@ -13,7 +13,7 @@ from django.utils import timezone
 
 from ..models import CheckResult, Outcome, TelegramBot, Watch
 from . import messages
-from .samad import SamadClient
+from .samad import ProgramsResult, SamadClient
 from .telegram import TelegramNotifier
 
 logger = logging.getLogger(__name__)
@@ -54,6 +54,19 @@ def run_watch(
     week_start = week_start or watch.target_week_start()
     previous = watch.results.first()
 
+    skip = _skip_reason(watch, week_start, force_notify)
+    if skip:
+        # No request is made at all -- that is the whole point -- so nothing is
+        # recorded either, and last_checked_at keeps meaning "last real poll".
+        report = CheckReport(
+            watch=watch,
+            week_start=week_start,
+            result=ProgramsResult(outcome=Outcome.SKIPPED, detail=skip),
+        )
+        report.notes.append(skip)
+        logger.info(report.summary)
+        return report
+
     client = SamadClient(watch.account, session=session)
     result = client.fetch_programs(week_start, self_id=watch.self_id)
 
@@ -87,6 +100,39 @@ def run_all(queryset=None, **kwargs):
 
 
 # -- deciding ----------------------------------------------------------------
+
+
+def _skip_reason(watch, week_start, force_notify):
+    """Why this poll can be skipped, or None to go ahead and ask.
+
+    Two savings, both safe:
+
+    * A week we have already announced will not change its mind, so there is
+      nothing left to learn until the target rolls to the next Saturday.
+    * A watch that `follows` another has no reason to ask until the one it
+      follows has opened -- with a periodic safety poll so a self that
+      publishes first can never be missed entirely.
+    """
+    if force_notify:
+        return None
+
+    if watch.already_notified_for(week_start):
+        return f"Already announced {week_start}; nothing left to ask."
+
+    if watch.gate_is_open(week_start):
+        return None
+
+    if watch.last_checked_at is None:
+        # Never polled: take one reading so the safety timer has a baseline.
+        return None
+
+    minutes = settings.SOFREH["GATED_RECHECK_MINUTES"]
+    if minutes:
+        since = (timezone.now() - watch.last_checked_at).total_seconds() / 60
+        if since >= minutes:
+            return None
+
+    return f"Waiting for {watch.follows.name} to open first."
 
 
 def _messages_for(watch, week_start, result, previous, force_notify, report):

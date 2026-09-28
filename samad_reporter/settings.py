@@ -122,6 +122,11 @@ SOFREH = {
     "TOKEN_EXPIRY_WARNING_DAYS": int(
         os.environ.get("SOFREH_EXPIRY_WARNING_DAYS", "14")
     ),
+    # A gated watch (one that `follows` another) is normally skipped until the
+    # watch it follows opens. This is the safety net: poll it anyway if it has
+    # not been checked for this long, so a self that publishes first can never
+    # be missed entirely. Set to 0 to trust the gate completely.
+    "GATED_RECHECK_MINUTES": int(os.environ.get("SOFREH_GATED_RECHECK", "60")),
 }
 
 LOGGING = {

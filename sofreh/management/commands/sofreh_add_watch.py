@@ -30,8 +30,8 @@ class Command(BaseCommand):
         parser.add_argument(
             "--weeks-ahead",
             type=int,
-            default=1,
-            help="1 = the Saturday after this week (default).",
+            default=0,
+            help="0 = the upcoming Saturday (default). 1 looks a week further out.",
         )
         parser.add_argument(
             "--account", help="Samad account label. Defaults to the active one."
@@ -40,12 +40,19 @@ class Command(BaseCommand):
             "--bot", help="Telegram bot label. Defaults to the active one."
         )
         parser.add_argument(
+            "--follows",
+            help="Name of a watch this one waits for. It will not be polled "
+            "until that watch sees its week open, which saves requests when "
+            "one self reliably publishes first.",
+        )
+        parser.add_argument(
             "--disable", action="store_true", help="Pause this watch instead."
         )
 
     def handle(self, *args, **options):
         account = self._account(options.get("account"))
         bot = self._bot(options.get("bot"))
+        follows = self._follows(options.get("follows"), options["name"])
 
         watch, created = Watch.objects.get_or_create(
             name=options["name"],
@@ -54,6 +61,7 @@ class Command(BaseCommand):
                 "bot": bot,
                 "self_id": options["self_id"],
                 "weeks_ahead": options["weeks_ahead"],
+                "follows": follows,
             },
         )
         if created:
@@ -68,6 +76,7 @@ class Command(BaseCommand):
             watch.weeks_ahead = options["weeks_ahead"]
             watch.account = account
             watch.bot = bot
+            watch.follows = follows
             watch.is_active = not options["disable"]
             watch.save()
             self.stdout.write(
@@ -80,6 +89,16 @@ class Command(BaseCommand):
             self.stdout.write(self.style.WARNING(f"Paused {watch.name!r}."))
 
         self._report()
+
+    def _follows(self, name, own_name):
+        if not name:
+            return None
+        if name == own_name:
+            raise CommandError("A watch cannot follow itself.")
+        parent = Watch.objects.filter(name=name).first()
+        if parent is None:
+            raise CommandError(f"No watch named {name!r} to follow.")
+        return parent
 
     def _account(self, label):
         account = (
@@ -106,7 +125,8 @@ class Command(BaseCommand):
         self.stdout.write("Watches:")
         for watch in Watch.objects.order_by("name"):
             state = "" if watch.is_active else "  (paused)"
+            gated = f", follows {watch.follows.name}" if watch.follows else ""
             self.stdout.write(
                 f"  • {watch.name} — selfId={watch.self_id or 'omitted'}, "
-                f"week {watch.target_week_start()}{state}"
+                f"week {watch.target_week_start()}{gated}{state}"
             )
