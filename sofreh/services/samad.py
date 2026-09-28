@@ -50,6 +50,9 @@ class ProgramsResult:
     program_count: int = 0
     reservable_count: int = 0
     days: list = field(default_factory=list)
+    # Which meals this self serves (ناهار / شام). The dining hall decides, so
+    # we report what the API says rather than guessing from the self id.
+    meal_names: list = field(default_factory=list)
     detail: str = ""
     refreshed: bool = False
 
@@ -237,7 +240,9 @@ class SamadClient:
         resource = body.get("messageResource") or ""
 
         if api_type == TYPE_INFO:
-            days, programs, reservable = summarise_payload(body.get("payload") or {})
+            days, programs, reservable, meals = summarise_payload(
+                body.get("payload") or {}
+            )
             return ProgramsResult(
                 outcome=Outcome.OPEN,
                 http_status=http_status,
@@ -247,6 +252,7 @@ class SamadClient:
                 program_count=programs,
                 reservable_count=reservable,
                 days=days,
+                meal_names=meals,
             )
 
         if api_type == TYPE_ERROR:
@@ -285,6 +291,7 @@ def summarise_payload(payload):
     days = []
     total = 0
     reservable_total = 0
+    meals = []
 
     for day_programs in payload.get("selfWeekPrograms") or []:
         if not day_programs:
@@ -298,10 +305,13 @@ def summarise_payload(payload):
             name = program.get("foodName") or program.get("foodTypeTitle") or ""
             if name and name not in summary.foods:
                 summary.foods.append(name)
+            meal = program.get("mealTypeName")
+            if meal and meal not in meals:
+                meals.append(meal)
             # The API flips this to False once the program can actually be booked.
             if program.get("reserveRuleViolated") is False:
                 summary.reservable += 1
                 reservable_total += 1
         days.append(summary)
 
-    return days, total, reservable_total
+    return days, total, reservable_total, meals

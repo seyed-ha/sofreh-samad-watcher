@@ -37,11 +37,21 @@ def _day_line(day):
 
 
 def reservation_open(watch, week_start, result):
-    """The message the whole project exists to send."""
+    """The message the whole project exists to send.
+
+    Leads with the watch name, because several watches run at once -- the
+    lunch self and the dorm self each send their own message, and the first
+    line has to say which one you are looking at.
+    """
+    week_line = f"📅 هفته‌ی شنبه <b>{escape(str(week_start))}</b>"
+    if result.meal_names:
+        week_line += " · " + escape("، ".join(result.meal_names))
+
     lines = [
         "🍽 <b>رزرو غذا باز شد!</b>",
+        f"📍 <b>{escape(watch.name)}</b>",
         "",
-        f"📅 هفته‌ی شنبه <b>{escape(str(week_start))}</b>",
+        week_line,
     ]
 
     if result.reservable_count:
@@ -61,11 +71,7 @@ def reservation_open(watch, week_start, result):
         lines.append("")
         lines.extend(_day_line(day) for day in result.days)
 
-    lines += [
-        "",
-        f"🔗 {escape(_site_url())}",
-        f"<i>{escape(watch.name)}</i>",
-    ]
+    lines += ["", f"🔗 {escape(_site_url())}"]
     return "\n".join(lines)
 
 
@@ -91,14 +97,13 @@ def api_problem(watch, week_start, result):
     return "\n".join(
         [
             "⚠️ <b>Sofreh: پاسخ غیرمنتظره از سماد</b>",
+            f"📍 <b>{escape(watch.name)}</b>",
             "",
             f"📅 هفته‌ی <b>{escape(str(week_start))}</b>",
             f"وضعیت: <code>{escape(str(result.outcome))}</code>"
             + (f" / HTTP {result.http_status}" if result.http_status else ""),
             "",
             f"<code>{escape(str(detail)[:500])}</code>",
-            "",
-            f"<i>{escape(watch.name)}</i>",
         ]
     )
 
@@ -137,8 +142,8 @@ def recovered(watch, week_start):
     return "\n".join(
         [
             "✅ <b>Sofreh دوباره وصل شد</b>",
+            f"📍 <b>{escape(watch.name)}</b>",
             "",
             f"📅 در حال پایش هفته‌ی <b>{escape(str(week_start))}</b>",
-            f"<i>{escape(watch.name)}</i>",
         ]
     )
