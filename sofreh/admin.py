@@ -26,6 +26,7 @@ class SamadAccountAdmin(admin.ModelAdmin):
         "last_refreshed_at",
         "last_auth_error",
         "auth_alert_sent_at",
+        "expiry_alert_sent_at",
         "created_at",
         "updated_at",
     )
@@ -49,6 +50,7 @@ class SamadAccountAdmin(admin.ModelAdmin):
                     "last_refreshed_at",
                     "last_auth_error",
                     "auth_alert_sent_at",
+                    "expiry_alert_sent_at",
                     "created_at",
                     "updated_at",
                 )

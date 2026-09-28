@@ -116,6 +116,12 @@ SOFREH = {
     "USER_AGENT": os.environ.get("SAMAD_USER_AGENT", "Sofreh/0.1 (+reservation-watcher)"),
     # How long `manage.py watch` sleeps between polls, in seconds.
     "POLL_INTERVAL_SECONDS": int(os.environ.get("SOFREH_POLL_INTERVAL", "300")),
+    # Warn on Telegram this many days before the refresh token expires. Nothing
+    # can renew that token, so the warning has to arrive while there is still
+    # time to log in and repaste.
+    "TOKEN_EXPIRY_WARNING_DAYS": int(
+        os.environ.get("SOFREH_EXPIRY_WARNING_DAYS", "14")
+    ),
 }
 
 LOGGING = {

@@ -40,6 +40,7 @@
     .wrap { overflow-x: auto; }
     footer { margin-top: 28px; font-size: 13px; color: var(--muted); }
     a { color: inherit; }
+    .muted { color: var(--muted); }
     code { font-size: 12px; }
   </style>
 </head>
@@ -95,7 +96,17 @@
         {% else %}<span class="bad">none</span>{% endif %}
       </dd>
       <dt>Access token expires</dt>
-      <dd>{% if access_expires_at %}{{ access_expires_at|date:"Y-m-d H:i" }}{% else %}unknown{% endif %}</dd>
+      <dd>{% if access_expires_at %}{{ access_expires_at|date:"Y-m-d" }} <span class="muted">(renews itself)</span>{% else %}unknown{% endif %}</dd>
+      <dt>Refresh token expires</dt>
+      <dd>
+        {% if refresh_expires_at %}
+          <span class="{% if refresh_days_left <= expiry_threshold %}bad{% endif %}">
+            {{ refresh_expires_at|date:"Y-m-d" }}
+            {% if refresh_days_left is not None %}({{ refresh_days_left }} days left){% endif %}
+          </span>
+          {% if refresh_days_left <= expiry_threshold %}— nothing can renew this; repaste soon{% endif %}
+        {% else %}<span class="bad">none stored — no automatic renewal</span>{% endif %}
+      </dd>
       <dt>Telegram</dt>
       <dd>
         {% if bot %}{{ bot.label }} — {{ chat_count }} chat{{ chat_count|pluralize }}

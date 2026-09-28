@@ -87,9 +87,11 @@ class Command(BaseCommand):
             account.refresh_token = refresh_token
             changed.append("refresh token")
         if changed:
-            # New credentials mean any standing alert no longer applies.
+            # New credentials mean any standing alert no longer applies —
+            # including the expiry warning, so the next one gets its own.
             account.last_auth_error = ""
             account.auth_alert_sent_at = None
+            account.expiry_alert_sent_at = None
             account.save()
             self.stdout.write(
                 self.style.SUCCESS(f"Updated the {' and '.join(changed)}.")

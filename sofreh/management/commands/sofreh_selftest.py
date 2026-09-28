@@ -8,6 +8,7 @@ answered by looking at your phone.
 
 from datetime import date
 
+from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 
 from sofreh.dates import week_start_for
@@ -74,8 +75,19 @@ class Command(BaseCommand):
 
         if account.refresh_token:
             refresh_expiry = jwt_expiry(account.refresh_token)
+            days_left = account.refresh_token_days_left()
+            threshold = settings.SOFREH["TOKEN_EXPIRY_WARNING_DAYS"]
             when = f" until {refresh_expiry:%Y-%m-%d}" if refresh_expiry else ""
-            self._ok(f"Refresh token stored{when} — renewal is automatic")
+            if days_left is not None and days_left <= threshold:
+                self._warn(
+                    f"Refresh token expires in {days_left} day(s){when}. Nothing "
+                    "can renew it — log in to Samad and repaste before then."
+                )
+            else:
+                left = f" ({days_left} days left)" if days_left is not None else ""
+                self._ok(
+                    f"Refresh token stored{when}{left} — renewal is automatic"
+                )
         else:
             self._warn(
                 "No refresh token: you will have to repaste by hand when the "

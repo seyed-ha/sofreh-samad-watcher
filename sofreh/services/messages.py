@@ -103,6 +103,35 @@ def api_problem(watch, week_start, result):
     )
 
 
+def token_expiring(account, days_left, expires_at):
+    """Sent once, while there is still time to do something about it.
+
+    The access token renews itself; the refresh token does not. When it goes,
+    the watcher goes blind, so this warning arrives before that happens rather
+    than after.
+    """
+    if days_left <= 0:
+        when = "<b>همین حالا منقضی شده</b>"
+    elif days_left == 1:
+        when = "<b>فردا</b> منقضی می‌شود"
+    else:
+        when = f"تا <b>{days_left} روز</b> دیگر منقضی می‌شود"
+
+    return "\n".join(
+        [
+            "⏳ <b>Sofreh: رفرش‌توکن سماد رو به اتمام است</b>",
+            "",
+            f"رفرش‌توکن {when} (تاریخ: {escape(f'{expires_at:%Y-%m-%d}')}).",
+            "بعد از آن، تمدید خودکار کار نمی‌کند و باید دوباره از سایت سماد "
+            "لاگین کنی و توکن‌های جدید را در پنل ادمین بگذاری.",
+            "",
+            "تا آن موقع همه چیز عادی کار می‌کند — این فقط یک یادآوری است.",
+            "",
+            f"<i>حساب: {escape(account.label)}</i>",
+        ]
+    )
+
+
 def recovered(watch, week_start):
     """Sent when polling works again after a problem, so silence means health."""
     return "\n".join(

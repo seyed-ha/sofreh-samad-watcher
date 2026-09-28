@@ -4,6 +4,8 @@ Everything the user edits day to day lives here rather than in settings, so a
 new access token or chat id is one admin save away — no redeploy, no restart.
 """
 
+import math
+
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
@@ -51,6 +53,9 @@ class SamadAccount(models.Model):
     # Set when we warn about broken credentials; cleared on the next success so
     # the user gets one alert per outage instead of one per poll.
     auth_alert_sent_at = models.DateTimeField(null=True, blank=True)
+    # Set when we warn that the refresh token is running out. Cleared when new
+    # tokens are pasted, so the next expiry gets its own warning.
+    expiry_alert_sent_at = models.DateTimeField(null=True, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -97,6 +102,20 @@ class SamadAccount(models.Model):
             self.save(
                 update_fields=["last_auth_error", "auth_alert_sent_at", "updated_at"]
             )
+
+    def refresh_token_days_left(self, now=None):
+        """Days until the refresh token dies, or None if it cannot be read.
+
+        This is the one token nothing can renew: once it expires, only a fresh
+        browser login will do. Worth warning about before it happens.
+        """
+        expires_at = self.refresh_token_expires_at
+        if expires_at is None:
+            return None
+        now = now or timezone.now()
+        # Round up: a token with 23 hours left has one day left, not zero.
+        # Truncating would tell the user it had already expired.
+        return math.ceil((expires_at - now).total_seconds() / 86400)
 
 
 class TelegramBot(models.Model):
