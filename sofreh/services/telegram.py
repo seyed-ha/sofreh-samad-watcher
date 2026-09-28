@@ -68,6 +68,52 @@ class TelegramNotifier:
 
         return Delivery(chat_id, True)
 
+    def discover_chats(self):
+        """List chats that have messaged the bot, via getUpdates.
+
+        Telegram only lets a bot write to someone who wrote to it first, so
+        anyone who has done that is exactly who we can notify. Returns
+        (chats, error) where chats is a list of {chat_id, type, name}.
+        """
+        url = f"{API_ROOT}/bot{self.bot.bot_token}/getUpdates"
+        try:
+            response = self.session.get(url, timeout=self.config["REQUEST_TIMEOUT"])
+        except requests.RequestException as exc:
+            return [], f"{type(exc).__name__}: {exc}"
+        if response.status_code != 200:
+            return [], f"HTTP {response.status_code}: {response.text[:300]}"
+        try:
+            body = response.json()
+        except ValueError:
+            return [], "getUpdates did not return JSON."
+        if not body.get("ok"):
+            return [], str(body.get("description") or "getUpdates failed.")
+
+        found = {}
+        for update in body.get("result") or []:
+            message = (
+                update.get("message")
+                or update.get("channel_post")
+                or update.get("my_chat_member")
+                or {}
+            )
+            chat = message.get("chat") or {}
+            chat_id = chat.get("id")
+            if chat_id is None:
+                continue
+            found[str(chat_id)] = {
+                "chat_id": str(chat_id),
+                "type": chat.get("type", ""),
+                "name": chat.get("username")
+                or chat.get("title")
+                or " ".join(
+                    part
+                    for part in [chat.get("first_name"), chat.get("last_name")]
+                    if part
+                ),
+            }
+        return list(found.values()), ""
+
     def check_bot(self):
         """Call getMe, so `manage.py sofreh_test_telegram` can verify the token."""
         url = f"{API_ROOT}/bot{self.bot.bot_token}/getMe"

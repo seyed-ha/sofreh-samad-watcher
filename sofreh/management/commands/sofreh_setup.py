@@ -34,6 +34,12 @@ class Command(BaseCommand):
             help="1 = watch the Saturday after this week (default).",
         )
         parser.add_argument(
+            "--discover-chats",
+            action="store_true",
+            help="Ask Telegram who has messaged the bot and add them as chats. "
+            "Message the bot first, then run this.",
+        )
+        parser.add_argument(
             "--from-env",
             action="store_true",
             help="Read SAMAD_ACCESS_TOKEN, SAMAD_REFRESH_TOKEN, "
@@ -110,6 +116,13 @@ class Command(BaseCommand):
             bot.save()
             self.stdout.write(self.style.SUCCESS("Updated the Telegram bot token."))
 
+        if options.get("discover_chats"):
+            if bot is None:
+                raise CommandError(
+                    "--discover-chats needs a bot token; pass --bot-token first."
+                )
+            self._discover(bot)
+
         raw_ids = options.get("chat_ids") or ""
         chat_ids = [
             chat_id.strip()
@@ -142,6 +155,33 @@ class Command(BaseCommand):
             watch.bot = bot
             watch.save(update_fields=["bot", "updated_at"])
         return watch
+
+    def _discover(self, bot):
+        """Add whoever has written to the bot, since those are who we can reach."""
+        from sofreh.services.telegram import TelegramNotifier
+
+        chats, error = TelegramNotifier(bot).discover_chats()
+        if error:
+            raise CommandError(f"Could not ask Telegram who has written: {error}")
+        if not chats:
+            raise CommandError(
+                "Nobody has messaged this bot yet. Open Telegram, send the bot "
+                "any message, then run this again. (Telegram will not let a bot "
+                "write to someone who has never written to it.)"
+            )
+        for chat in chats:
+            _, created = TelegramChat.objects.get_or_create(
+                bot=bot,
+                chat_id=chat["chat_id"],
+                defaults={"label": chat["name"] or chat["type"]},
+            )
+            verb = "Added" if created else "Already had"
+            self.stdout.write(
+                self.style.SUCCESS(
+                    f"{verb} chat {chat['chat_id']} "
+                    f"({chat['type']}{', ' + chat['name'] if chat['name'] else ''})"
+                )
+            )
 
     def _report(self, account, bot):
         self.stdout.write("")

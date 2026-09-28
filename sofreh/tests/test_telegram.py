@@ -148,3 +148,68 @@ class MessageTests(TestCase):
         self.assertIn("401", text)
         self.assertIn("invalid_grant", text)
         self.assertIn("پنل ادمین", text)
+
+
+class DiscoverChatsTests(TestCase):
+    """Finding who we are allowed to message, without the user hunting for ids."""
+
+    def setUp(self):
+        self.bot = TelegramBot.objects.create(label="test", bot_token="123:AA")
+
+    def notifier(self, response):
+        return TelegramNotifier(self.bot, session=FakeSession(get_responses=[response]))
+
+    def test_reads_chat_ids_out_of_getupdates(self):
+        payload = {
+            "ok": True,
+            "result": [
+                {
+                    "message": {
+                        "chat": {
+                            "id": 111,
+                            "type": "private",
+                            "username": "hamid",
+                            "first_name": "Hamid",
+                        }
+                    }
+                },
+                {"channel_post": {"chat": {"id": -100, "type": "channel", "title": "Sofreh"}}},
+            ],
+        }
+
+        chats, error = self.notifier(FakeResponse(200, payload)).discover_chats()
+
+        self.assertEqual(error, "")
+        self.assertEqual(
+            sorted(c["chat_id"] for c in chats), sorted(["111", "-100"])
+        )
+        self.assertEqual(chats[0]["name"], "hamid")
+
+    def test_repeated_messages_from_one_person_collapse_to_one_chat(self):
+        payload = {
+            "ok": True,
+            "result": [
+                {"message": {"chat": {"id": 111, "type": "private", "username": "a"}}},
+                {"message": {"chat": {"id": 111, "type": "private", "username": "a"}}},
+            ],
+        }
+
+        chats, _ = self.notifier(FakeResponse(200, payload)).discover_chats()
+
+        self.assertEqual(len(chats), 1)
+
+    def test_nobody_has_written_yet(self):
+        chats, error = self.notifier(
+            FakeResponse(200, {"ok": True, "result": []})
+        ).discover_chats()
+
+        self.assertEqual(chats, [])
+        self.assertEqual(error, "")
+
+    def test_a_bad_token_is_reported(self):
+        chats, error = self.notifier(
+            FakeResponse(401, {"ok": False, "description": "Unauthorized"})
+        ).discover_chats()
+
+        self.assertEqual(chats, [])
+        self.assertIn("401", error)

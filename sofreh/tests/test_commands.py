@@ -209,3 +209,47 @@ class WatchCommandTests(TestCase):
             )
 
         self.assertIn("poll failed", out.getvalue())
+
+
+class DiscoverChatsCommandTests(TestCase):
+    def setUp(self):
+        SamadAccount.objects.create(label="default", access_token="abc")
+        self.bot = TelegramBot.objects.create(label="default", bot_token="123:AA")
+
+    def patched(self, chats, error=""):
+        notifier = mock.Mock()
+        notifier.discover_chats.return_value = (chats, error)
+        return mock.patch(
+            "sofreh.services.telegram.TelegramNotifier", return_value=notifier
+        )
+
+    def test_adds_whoever_has_messaged_the_bot(self):
+        out = StringIO()
+        found = [{"chat_id": "111", "type": "private", "name": "hamid"}]
+
+        with self.patched(found):
+            call_command("sofreh_setup", "--discover-chats", stdout=out)
+
+        self.assertIn("Added chat 111", out.getvalue())
+        self.assertEqual(self.bot.active_chat_ids(), ["111"])
+
+    def test_running_twice_does_not_duplicate(self):
+        found = [{"chat_id": "111", "type": "private", "name": "hamid"}]
+
+        with self.patched(found):
+            call_command("sofreh_setup", "--discover-chats", stdout=StringIO())
+            out = StringIO()
+            call_command("sofreh_setup", "--discover-chats", stdout=out)
+
+        self.assertIn("Already had chat 111", out.getvalue())
+        self.assertEqual(TelegramChat.objects.count(), 1)
+
+    def test_explains_the_telegram_gotcha_when_nobody_has_written(self):
+        with self.patched([]):
+            with self.assertRaisesMessage(CommandError, "send the bot any message"):
+                call_command("sofreh_setup", "--discover-chats", stdout=StringIO())
+
+    def test_surfaces_a_telegram_error(self):
+        with self.patched([], error="HTTP 401: Unauthorized"):
+            with self.assertRaisesMessage(CommandError, "Unauthorized"):
+                call_command("sofreh_setup", "--discover-chats", stdout=StringIO())
