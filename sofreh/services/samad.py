@@ -18,14 +18,16 @@ from ..models import Outcome
 
 logger = logging.getLogger(__name__)
 
-# API `type` values.
+# API `type` values. These are the whole protocol as far as Sofreh cares:
+# INFO means the week is published and open, ERROR means it is not open yet.
 TYPE_INFO = "INFO"
 TYPE_ERROR = "ERROR"
 
-# Errors that simply mean "this week has not been published yet". Anything else
-# with type ERROR is unexpected and worth telling the user about.
-NOT_OPEN_RESOURCES = {"SELF_HAS_NO_PROGRAM"}
-NOT_OPEN_CODES = {10108005}
+# The error we expect while waiting. Others are still treated as "not open"
+# (an ERROR is an ERROR), but they are recorded so an unexpected one is visible
+# in the check log rather than silently indistinguishable from the normal wait.
+EXPECTED_NOT_OPEN_RESOURCES = {"SELF_HAS_NO_PROGRAM"}
+EXPECTED_NOT_OPEN_CODES = {10108005}
 
 
 @dataclass
@@ -247,14 +249,34 @@ class SamadClient:
                 days=days,
             )
 
-        not_open = resource in NOT_OPEN_RESOURCES or api_code in NOT_OPEN_CODES
+        if api_type == TYPE_ERROR:
+            expected = (
+                resource in EXPECTED_NOT_OPEN_RESOURCES
+                or api_code in EXPECTED_NOT_OPEN_CODES
+            )
+            return ProgramsResult(
+                outcome=Outcome.NOT_OPEN,
+                http_status=http_status,
+                api_type=api_type,
+                api_code=api_code,
+                api_message=message,
+                detail=(
+                    ""
+                    if expected
+                    else f"Unfamiliar ERROR code ({resource or api_code}); "
+                    "treating it as not open yet."
+                ),
+            )
+
+        # Neither INFO nor ERROR: the endpoint is not answering the way it
+        # should, which is worth a word rather than an assumption.
         return ProgramsResult(
-            outcome=Outcome.NOT_OPEN if not_open else Outcome.API_ERROR,
+            outcome=Outcome.API_ERROR,
             http_status=http_status,
             api_type=api_type,
             api_code=api_code,
             api_message=message,
-            detail="" if not_open else f"Unexpected API error ({resource or api_code}).",
+            detail=f"Unexpected response type {api_type!r}.",
         )
 
 

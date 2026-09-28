@@ -84,9 +84,23 @@ class SamadClientTests(TestCase):
         self.assertEqual(result.outcome, Outcome.API_ERROR)
         self.assertEqual(result.http_status, 502)
 
-    def test_unrecognised_api_error_is_surfaced(self):
+    def test_any_error_type_means_not_open(self):
+        # ERROR means not open, full stop -- even a code we have not seen.
+        # The unfamiliar code is still recorded so it shows up in the log.
         client, _ = self.client_with(
             get_responses=[FakeResponse(200, PROGRAMS_UNKNOWN_ERROR)]
+        )
+
+        result = client.fetch_programs(WEEK)
+
+        self.assertEqual(result.outcome, Outcome.NOT_OPEN)
+        self.assertFalse(result.is_problem)
+        self.assertEqual(result.api_code, 10100001)
+        self.assertIn("Unfamiliar ERROR code", result.detail)
+
+    def test_a_response_that_is_neither_info_nor_error_is_a_problem(self):
+        client, _ = self.client_with(
+            get_responses=[FakeResponse(200, {"type": "WAT", "code": 1})]
         )
 
         result = client.fetch_programs(WEEK)
