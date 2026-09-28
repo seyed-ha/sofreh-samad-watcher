@@ -25,12 +25,17 @@ python3 -m venv .venv
 cp .env.example .env
 .venv/bin/python manage.py migrate
 
-# 2. Configure — tokens from Samad, bot token and chat id from Telegram
+# 2. Configure — tokens from Samad, bot token from @BotFather
 .venv/bin/python manage.py sofreh_setup \
     --access-token  '<access_token>' \
     --refresh-token '<refresh_token>' \
-    --bot-token     '123456789:AA…' \
-    --chat-ids      '111111111'
+    --bot-token     '123456789:AA…'
+
+# 3. Message your bot on Telegram, then let Sofreh find your chat id
+.venv/bin/python manage.py sofreh_setup --discover-chats
+
+# 4. Watch the dormitory self too (lunch is selfId 1, dinner is selfId 11)
+.venv/bin/python manage.py sofreh_add_watch --name 'خوابگاه — شام' --self-id 11
 
 # 3. Prove it works — sends two real Telegram messages
 .venv/bin/python manage.py sofreh_selftest
@@ -59,11 +64,15 @@ itself — see [Do I ever have to repaste?](#do-i-ever-have-to-repaste) below.
 2. **Send your new bot a message.** Telegram will not let a bot write to
    someone who has never written to it first. This is the single most common
    reason a correctly configured bot stays silent.
-3. Get your numeric chat id from [@userinfobot](https://t.me/userinfobot), or
-   open `https://api.telegram.org/bot<TOKEN>/getUpdates` and read it there.
-4. For a group: add the bot to the group and use the group's (negative) id.
+3. Run `manage.py sofreh_setup --discover-chats`. It asks Telegram who has
+   written to the bot and adds them — no hunting for numeric ids. That set is
+   exactly who the bot is allowed to message, so discovery and permission are
+   the same question.
+4. For a group: add the bot to the group, send a message there, then run
+   `--discover-chats` again.
 
-Several chat ids are fine — pass them comma-separated, or add them in the admin.
+Several chats are fine; every one of them gets every notification. You can also
+add them by hand with `--chat-ids 111,222` or in the admin.
 
 ---
 
@@ -113,6 +122,30 @@ Authorization: Bearer <access token>
 default) means "the Saturday after the week we are in now" — from any day of
 the 2026-09-26 week that resolves to 2026-10-03.
 
+### Dining halls (selfs)
+
+| `selfId` | Which | Meals it reports |
+| --- | --- | --- |
+| `1` | مرکزی — سلف دانشجویان آقا | ناهار |
+| `11` | خوابگاه — dormitory | شام، ناهار |
+
+Each self publishes its week on its own schedule, so each gets **its own watch
+and its own message**. One opening never speaks for the other, and never
+silences it — each watch tracks separately which week it has announced.
+
+The meal line in the notification comes from the API's `mealTypeName`, not from
+the self id. That matters: the dormitory self turns out to serve lunch as well
+as dinner, which guessing from the id would have got wrong.
+
+Add a self with:
+
+```bash
+.venv/bin/python manage.py sofreh_add_watch --name 'خوابگاه — شام' --self-id 11
+```
+
+The `--name` is the first line of the notification, so pick something you will
+recognise at a glance on your phone.
+
 | Response | Meaning | What Sofreh does |
 | --- | --- | --- |
 | `type: "INFO"` | Week is open | **Announce it, once** |
@@ -156,7 +189,8 @@ other.
 
 | Command | What it does |
 | --- | --- |
-| `sofreh_setup` | Create or update tokens, bot, chats and the default watch. Idempotent — rerun it to paste new tokens, which also clears any standing alert. |
+| `sofreh_setup` | Create or update tokens, bot, chats and the default watch. Idempotent — rerun it to paste new tokens, which also clears any standing alert. `--discover-chats` finds your Telegram chat id for you. |
+| `sofreh_add_watch` | Add or update a watch for another self. `--name`, `--self-id`, `--weeks-ahead`, `--disable`. |
 | `sofreh_selftest` | Walk the whole chain and send two real test messages. `--no-telegram`, `--week`. |
 | `sofreh_check` | One poll. `--dry-run`, `--force-notify`, `--week 2026-10-03`, `--watch <name\|id>`. |
 | `sofreh_watch` | Poll on a loop until stopped. `--interval`, `--max-polls`. |
@@ -252,7 +286,7 @@ sofreh/
     messages.py       Persian notification bodies
     checker.py        Poll → decide → notify → record
   management/commands/
-  tests/              75 tests, no network access
+  tests/              92 tests, no network access
 templates/sofreh/     The status page
 ```
 
@@ -268,16 +302,15 @@ secrets come from a gitignored `.env`.
 .venv/bin/python manage.py test sofreh
 ```
 
-75 tests, fully offline, built on trimmed copies of the real API responses.
+92 tests, fully offline, built on trimmed copies of the real API responses.
 They cover the HTTP 400 "not open" case, the 401-refresh-retry path, the
-announce-once rules, the refresh-token expiry warning, and that no token ever
-reaches the status page.
+announce-once rules, the refresh-token expiry warning, independent
+notification per self, and that no token ever reaches the status page.
 
 ---
 
 ## Not in this MVP
 
 Booking a meal, multiple Samad accounts, per-food filters ("only ping me for
-چلو جوجه"), and a real scheduler. The models leave room for all of them: `Watch`
-already supports several rows with different `self_id` and `weeks_ahead`, and
-`CheckResult` keeps the history those features would build on.
+چلو جوجه"), and a real scheduler. `CheckResult` keeps the history those features
+would build on.
