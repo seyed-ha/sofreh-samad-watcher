@@ -119,6 +119,7 @@ the 2026-09-26 week that resolves to 2026-10-03.
 | `type: "ERROR"` | Not open yet | Stay quiet, poll again |
 | HTTP 401 → refresh works | Token had expired | Retry silently, carry on |
 | HTTP 401 → refresh fails | Tokens are dead | Warn once, ask you to repaste |
+| Refresh token within 14 days of expiry | About to go blind | Warn once, **before** it breaks |
 | Anything else | Genuinely broken | Warn once, until it changes |
 
 Three details that are easy to get wrong, all verified against the live server:
@@ -142,6 +143,12 @@ Most of the logic is restraint, because a notifier that cries wolf gets muted:
 - A repeated error stays silent until it changes or clears.
 - Recovery after an outage sends one short "back online" note — so silence
   reliably means health, not a crashed process.
+- The refresh-token expiry warning is a nudge, not a nag: sent once, then quiet
+  until you paste new tokens.
+
+A single poll can produce more than one message — "the week opened" and "your
+token is about to expire" are both worth hearing, and neither crowds out the
+other.
 
 ---
 
@@ -185,6 +192,12 @@ Mostly no. Your current tokens:
 The access token is a JWT, so Sofreh reads its `exp` and refreshes **before**
 spending a doomed request. A surprise 401 buys exactly one refresh-and-retry.
 In normal running you will not touch it for months.
+
+**You will be told before this becomes a problem.** When the refresh token comes
+within 14 days of expiring, Sofreh sends one Telegram nudge while there is still
+time to act — it does not wait for the thing to break. The status page shows the
+same countdown, and `sofreh_selftest` flags it. Tune the window with
+`SOFREH_EXPIRY_WARNING_DAYS` in `.env`.
 
 You do have to repaste when:
 
@@ -239,7 +252,7 @@ sofreh/
     messages.py       Persian notification bodies
     checker.py        Poll → decide → notify → record
   management/commands/
-  tests/              64 tests, no network access
+  tests/              75 tests, no network access
 templates/sofreh/     The status page
 ```
 
@@ -255,9 +268,10 @@ secrets come from a gitignored `.env`.
 .venv/bin/python manage.py test sofreh
 ```
 
-64 tests, fully offline, built on trimmed copies of the real API responses.
+75 tests, fully offline, built on trimmed copies of the real API responses.
 They cover the HTTP 400 "not open" case, the 401-refresh-retry path, the
-announce-once rules, and that no token ever reaches the status page.
+announce-once rules, the refresh-token expiry warning, and that no token ever
+reaches the status page.
 
 ---
 
