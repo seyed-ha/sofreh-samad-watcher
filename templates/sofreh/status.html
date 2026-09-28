@@ -52,23 +52,23 @@
     <div class="card">
       <p class="headline {% if row.is_open %}ok{% elif row.has_problem %}bad{% endif %}">
         {% if row.is_open %}
-          Reservation is open for {{ row.target_week }}
+          Reservation is open for {{ row.target_week|date:"Y-m-d" }}
         {% elif row.has_problem %}
           Something is wrong — {{ row.latest.get_outcome_display }}
         {% elif row.latest %}
-          Not open yet for {{ row.target_week }}
+          Not open yet for {{ row.target_week|date:"Y-m-d" }}
         {% else %}
           Never checked
         {% endif %}
       </p>
       <dl>
         <dt>Watch</dt><dd>{{ row.watch.name }}{% if not row.watch.is_active %} (paused){% endif %}</dd>
-        <dt>Target week</dt><dd>{{ row.target_week }} (Saturday)</dd>
+        <dt>Target week</dt><dd>{{ row.target_week|date:"Y-m-d" }} (Saturday)</dd>
         <dt>Dining hall</dt><dd>{{ row.watch.self_id|default:"all" }}</dd>
         <dt>Last checked</dt>
         <dd>{% if row.watch.last_checked_at %}{{ row.watch.last_checked_at|date:"Y-m-d H:i" }}{% else %}never{% endif %}</dd>
         <dt>Announced</dt>
-        <dd>{{ row.watch.notified_week_start|default:"not yet" }}</dd>
+        <dd>{% if row.watch.notified_week_start %}{{ row.watch.notified_week_start|date:"Y-m-d" }}{% else %}not yet{% endif %}</dd>
         {% if row.latest.api_message %}
           <dt>API said</dt><dd>{{ row.latest.api_message }}</dd>
         {% endif %}
@@ -114,8 +114,8 @@
       <tbody>
         {% for check in recent %}
           <tr>
-            <td>{{ check.checked_at|date:"m-d H:i" }}</td>
-            <td>{{ check.week_start }}</td>
+            <td>{{ check.checked_at|date:"Y-m-d H:i" }}</td>
+            <td>{{ check.week_start|date:"Y-m-d" }}</td>
             <td class="{% if check.is_problem %}bad{% elif check.outcome == 'open' %}ok{% endif %}">
               {{ check.get_outcome_display }}
             </td>

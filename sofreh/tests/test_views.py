@@ -58,6 +58,25 @@ class StatusPageTests(TestCase):
         self.assertContains(response, "needs new tokens")
         self.assertContains(response, "invalid_grant")
 
+    def test_dates_are_iso_like_everywhere_else(self):
+        # The CLI, the API and the Telegram message all say 2026-10-03. A page
+        # saying "Oct. 3, 2026" makes the reader translate between formats for
+        # the one value the whole tool is about.
+        watch = self._watch()
+        CheckResult.objects.create(
+            watch=watch, week_start=date(2026, 10, 3), outcome=Outcome.NOT_OPEN
+        )
+        watch.notified_week_start = date(2026, 9, 26)
+        watch.save()
+
+        response = self.client.get(reverse("sofreh:status"))
+        body = response.content.decode()
+
+        self.assertIn("2026-10-03", body)
+        self.assertIn("2026-09-26", body)
+        self.assertNotIn("Oct. 3, 2026", body)
+        self.assertNotIn("Sept. 26, 2026", body)
+
     def test_no_secret_reaches_the_page(self):
         self._watch()
 
