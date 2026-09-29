@@ -85,7 +85,7 @@ $ .venv/bin/python manage.py sofreh_selftest
 
 1. Stored credentials
   ✓ Access token valid until YYYY-MM-DD
-  ✓ Refresh token stored until YYYY-MM-DD — renewal is automatic
+  ✓ Refresh token stored until YYYY-MM-DD (357 days left) — renewal is automatic
 
 2. Samad API
   ✓ 2026-10-03: not open yet — the API answered ERROR (هیچ برنامه ی غذایی ای تعریف نشده است.).
@@ -126,8 +126,8 @@ the 2026-09-26 week that resolves to 2026-10-03.
 
 | `selfId` | Which | Meals it reports |
 | --- | --- | --- |
-| `1` | مرکزی — سلف دانشجویان آقا | ناهار |
-| `11` | خوابگاه — dormitory | شام، ناهار |
+| `1` | مرکزی (central student self) | ناهار |
+| `11` | خوابگاه (dormitory self) | شام، ناهار |
 
 Each self publishes its week on its own schedule, so each gets **its own watch
 and its own message**. One opening never speaks for the other, and never
@@ -209,19 +209,22 @@ other.
 - **http://127.0.0.1:8000/admin/** — full configuration. Paste new tokens, add
   chat ids, pause a watch, read the check history.
 
-The bundled superuser is your own superuser. Fine on your own laptop; change
-it before putting this anywhere reachable.
+Create your own login first:
+
+```bash
+.venv/bin/python manage.py createsuperuser
+```
+
+Pick a real password even locally — the admin can read and change your stored
+tokens.
 
 ---
 
 ## Do I ever have to repaste?
 
-Mostly no. Your current tokens:
-
-| Token | Expires | Lifetime |
-| --- | --- | --- |
-| access | YYYY-MM-DD | ~6 months |
-| refresh | YYYY-MM-DD | ~1 year |
+Mostly no. Samad issues a short-lived access token and a long-lived refresh
+token — in practice months and about a year respectively. Check yours with
+`manage.py sofreh_selftest`, which prints both expiry dates.
 
 The access token is a JWT, so Sofreh reads its `exp` and refreshes **before**
 spending a doomed request. A surprise 401 buys exactly one refresh-and-retry.
