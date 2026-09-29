@@ -253,3 +253,45 @@ class DiscoverChatsCommandTests(TestCase):
         with self.patched([], error="HTTP 401: Unauthorized"):
             with self.assertRaisesMessage(CommandError, "Unauthorized"):
                 call_command("sofreh_setup", "--discover-chats", stdout=StringIO())
+
+
+class WatchMigrationGuardTests(TestCase):
+    """A long-running watcher must not keep running against a schema that
+    moved under it — that once made a stale process announce the wrong week."""
+
+    def setUp(self):
+        account = SamadAccount.objects.create(
+            label="default", access_token=make_jwt(exp=FAR_FUTURE)
+        )
+        self.watch = Watch.objects.create(name="Next week", account=account)
+
+    def test_stops_when_migrations_change_mid_run(self):
+        result = ProgramsResult(outcome=Outcome.NOT_OPEN)
+        out = StringIO()
+
+        with fake_client(result), mock.patch(
+            "sofreh.management.commands.sofreh_watch.time.sleep"
+        ), mock.patch(
+            "sofreh.management.commands.sofreh_watch._applied_migrations",
+            side_effect=[{"a"}, {"a", "b"}],
+        ):
+            call_command("sofreh_watch", "--interval=60", stdout=out)
+
+        self.assertIn("Migrations changed while running", out.getvalue())
+        # It stopped after the first poll rather than looping forever.
+        self.assertEqual(self.watch.results.count(), 1)
+
+    def test_keeps_running_when_migrations_are_unchanged(self):
+        result = ProgramsResult(outcome=Outcome.NOT_OPEN)
+
+        with fake_client(result), mock.patch(
+            "sofreh.management.commands.sofreh_watch.time.sleep"
+        ), mock.patch(
+            "sofreh.management.commands.sofreh_watch._applied_migrations",
+            return_value={"a"},
+        ):
+            call_command(
+                "sofreh_watch", "--max-polls=2", "--interval=60", stdout=StringIO()
+            )
+
+        self.assertEqual(self.watch.results.count(), 2)

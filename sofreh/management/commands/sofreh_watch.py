@@ -10,6 +10,8 @@ import time
 
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
+from django.db import connection
+from django.db.migrations.recorder import MigrationRecorder
 from django.utils import timezone
 
 from sofreh.services.checker import run_all
@@ -55,12 +57,28 @@ class Command(BaseCommand):
             )
         )
 
+        baseline = _applied_migrations()
+
         polls = 0
         try:
             while True:
                 polls += 1
                 self._poll(identifier, week)
                 if max_polls and polls >= max_polls:
+                    break
+                if _applied_migrations() != baseline:
+                    # The schema moved under us, so this process is now running
+                    # code that no longer matches the data it is reading. That
+                    # once made a stale watcher announce the wrong week; exit
+                    # and let the operator start a fresh one.
+                    self.stdout.write("")
+                    self.stdout.write(
+                        self.style.WARNING(
+                            "Migrations changed while running — stopping so a "
+                            "restart picks up the new code. Run "
+                            "`manage.py sofreh_watch` again."
+                        )
+                    )
                     break
                 time.sleep(interval)
         except KeyboardInterrupt:
@@ -82,3 +100,16 @@ class Command(BaseCommand):
             if report.result.is_problem:
                 style = self.style.ERROR
             self.stdout.write(style(f"{stamp}  {report.summary}"))
+
+
+def _applied_migrations():
+    """The set of applied migrations, or None if it cannot be read.
+
+    Used only to notice the schema shifting beneath a long-running watcher.
+    Unreadable is not fatal: never stop watching over a bookkeeping query.
+    """
+    try:
+        return set(MigrationRecorder(connection).applied_migrations())
+    except Exception:  # pragma: no cover - defensive
+        logger.debug("Could not read applied migrations.", exc_info=True)
+        return None
